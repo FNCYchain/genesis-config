@@ -74,6 +74,8 @@ contract Staking is InjectorContextHolder, IStaking {
 
     // Fncy II 
     event ShareRewards(address account, uint256 amount);
+    // Fncy_FAM
+    event ChangeValidatorDelegatorWhitelist(address validatorAddress, address delegator, bool result);
 
     enum ValidatorStatus {
         NotFound,
@@ -125,6 +127,9 @@ contract Staking is InjectorContextHolder, IStaking {
     mapping(address => mapping(address => ValidatorDelegation)) internal _validatorDelegations;
     // mapping with validator snapshots per each epoch (validator -> epoch -> snapshot)
     mapping(address => mapping(uint64 => ValidatorSnapshot)) internal _validatorSnapshots;
+    // ################## FNCY_FAM ##################
+    // mapping validatorAddress => delegator => bool
+    mapping(address => mapping(address => bool)) internal _validatorDelegateWhitelist;
 
     constructor(
         IStaking stakingContract,
@@ -257,6 +262,8 @@ contract Staking is InjectorContextHolder, IStaking {
 
     function delegate(address validatorAddress) payable external override {
         require(_CHAIN_CONFIG_CONTRACT.getEnableDelegate(), "delegate should enabled");
+        bool isWhitelistDelegator = getValidatorDelegatorWhitelist(validatorAddress, msg.sender);
+        require(isWhitelistDelegator, "Not a whitelisted");
         _delegateTo(msg.sender, validatorAddress, msg.value);
     }
 
@@ -884,5 +891,19 @@ contract Staking is InjectorContextHolder, IStaking {
         }
         // emit event
         emit ValidatorSlashed(validatorAddress, slashesCount, epoch);
+    }
+
+    // ################## FNCY_FAM ##################
+    function getValidatorDelegatorWhitelist(address validatorAddress, address delegator) public override view returns(bool) {
+        return _validatorDelegateWhitelist[validatorAddress][delegator];
+    }
+
+    function changeValidatorDelegatorWhitelist(address validatorAddress, address delegator, bool result) external override {
+        Validator memory validator = _validatorsMap[validatorAddress];
+        require(validator.ownerAddress == msg.sender, "only owner");
+
+        _validatorDelegateWhitelist[validatorAddress][delegator] = result;
+
+        emit ChangeValidatorDelegatorWhitelist(validatorAddress, delegator, result);
     }
 }
